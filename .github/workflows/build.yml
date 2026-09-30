@@ -56,6 +56,9 @@ jobs:
             sleep 2
           done
           curl --fail --silent http://localhost:8188/system_stats
+          test "$(curl --fail --silent http://localhost:8188/v2/manager/version)" = "V4.2.2"
+          curl --fail --silent http://localhost:8188/features | python3 -c 'import json,sys; assert json.load(sys.stdin)["extension"]["manager"]["supports_v4"] is True'
+          curl --fail --silent http://localhost:8188/v2/manager/channel_url_list | python3 -c 'import json,sys; assert any(x.startswith("default::") for x in json.load(sys.stdin)["list"])'
           curl --fail --silent 'http://localhost:8888/api/status?token=test-token' -H 'Host: example-8888.proxy.runpod.net'
           curl --fail --silent 'http://localhost:8888/lab?token=test-token' >/dev/null
           test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Accept: application/json' http://localhost:8888/api/status)" = 403
@@ -70,6 +73,7 @@ jobs:
             sleep 2
           done
           curl --fail --silent http://localhost:8188/system_stats
+          test "$(curl --fail --silent http://localhost:8188/v2/manager/version)" = "V4.2.2"
           curl --fail --silent 'http://localhost:8888/api/status'
           curl --fail --silent 'http://localhost:8888/api/contents/persistence-test.txt' | python3 -c 'import json,sys; assert json.load(sys.stdin)["content"] == "saved across Pods"'
           docker stop -t 60 smoke
@@ -84,7 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v5"
+          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v6"
           docker tag comfy-global:test "$IMAGE:latest"
-          docker push "$IMAGE:comfy0.38.0-cuda13.0-v5"
+          docker push "$IMAGE:comfy0.38.0-cuda13.0-v6"
           docker push "$IMAGE:latest"

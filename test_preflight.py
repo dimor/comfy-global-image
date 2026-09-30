@@ -24,6 +24,10 @@ spec = importlib.util.spec_from_file_location('launcher', Path(__file__).with_na
 launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 
+manager_patch_spec = importlib.util.spec_from_file_location('manager_patch', Path(__file__).with_name('patch_manager.py'))
+manager_patch = importlib.util.module_from_spec(manager_patch_spec)
+manager_patch_spec.loader.exec_module(manager_patch)
+
 class Preflight(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -102,6 +106,18 @@ class Preflight(unittest.TestCase):
     def test_manager_is_enabled_by_default(self):
         source = Path(launcher.__file__).read_text()
         self.assertIn("os.environ.get('ENABLE_MANAGER', '1') != '0'", source)
+
+    def test_manager_copy_patch_avoids_unsupported_permission_changes(self):
+        package = self.root / 'comfyui_manager'
+        for relative in manager_patch.TARGETS:
+            target = package / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text('before\nshutil.copy(source, destination)\nafter\n')
+        manager_patch.patch_manager(package)
+        for relative in manager_patch.TARGETS:
+            source = (package / relative).read_text()
+            self.assertIn('shutil.copyfile(source, destination)', source)
+            self.assertNotIn('shutil.copy(source, destination)', source)
 
     def test_real_jupyter_authentication_and_proxy_host(self):
         # Actual Jupyter startup is tiny compared with a CUDA build. No GPU libraries required.
