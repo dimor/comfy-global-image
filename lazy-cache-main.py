@@ -187,6 +187,10 @@ def main():
     comfy = '/opt/ComfyUI'
     sys.path.insert(0, comfy)
     CACHE.mkdir(parents=True, exist_ok=True)
+    # main.py does this before importing folder_paths. We must preserve that order,
+    # otherwise flags such as --cpu and --listen are silently ignored.
+    import comfy.options
+    comfy.options.enable_args_parsing()
     import folder_paths
     install(folder_paths)
     runpy.run_path(f'{comfy}/main.py', run_name='__main__')

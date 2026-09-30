@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +14,23 @@ spec.loader.exec_module(cache_launcher)
 
 
 class LazyCacheTest(unittest.TestCase):
+    def test_comfy_argument_parsing_is_enabled_before_folder_paths_import(self):
+        events = []
+        fake_options = types.SimpleNamespace(enable_args_parsing=lambda: events.append('arguments'))
+        fake_comfy = types.ModuleType('comfy')
+        fake_comfy.__path__ = []
+        fake_comfy.options = fake_options
+        fake_paths = types.SimpleNamespace(get_full_path=lambda _folder, _filename: None)
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.dict('sys.modules', {'comfy': fake_comfy,
+                                           'comfy.options': fake_options,
+                                           'folder_paths': fake_paths}), \
+                patch.object(cache_launcher, 'CACHE', Path(temporary)), \
+                patch.object(cache_launcher, 'install', lambda _paths: events.append('paths')), \
+                patch.object(cache_launcher.runpy, 'run_path', lambda *_args, **_kwargs: events.append('main')):
+            cache_launcher.main()
+        self.assertEqual(events, ['arguments', 'paths', 'main'])
+
     def test_only_requested_model_is_copied_and_reported(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
