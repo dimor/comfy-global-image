@@ -141,7 +141,8 @@ def main():
         (DATA / 'models' / Path(source).relative_to('/opt/ComfyUI/models')).mkdir(parents=True, exist_ok=True)
     (LOCAL / 'temp').mkdir(exist_ok=True)
     restore_databases()
-    token = os.environ.get('JUPYTER_TOKEN') or secret('jupyter-token.txt')
+    no_jupyter_auth = os.environ.get('JUPYTER_NO_AUTH') == '1'
+    token = '' if no_jupyter_auth else (os.environ.get('JUPYTER_TOKEN') or secret('jupyter-token.txt'))
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
     # Config file avoids printing the token in the command line or Jupyter startup URL.
@@ -154,8 +155,8 @@ def main():
             '--temp-directory', str(LOCAL / 'temp')]
     if os.environ.get('COMFY_CPU_TEST') == '1':
         args.append('--cpu')
-    # Manager is available on demand; installation changes need an image rebuild.
-    if os.environ.get('ENABLE_MANAGER') == '1':
+    # Manager is enabled by default for its model installation and download controls.
+    if os.environ.get('ENABLE_MANAGER', '1') != '0':
         args.append('--enable-manager')
     extra_paths = model_paths(ROOT, LOCAL)
     if extra_paths:
@@ -164,7 +165,10 @@ def main():
     thread = threading.Thread(target=periodic_snapshot, daemon=True)
     thread.start()
     print('Persistent files: /workspace/ComfyUI. No git pull, pip install or model download at startup.', flush=True)
-    print('Jupyter file browser: :8888/lab. Token: /workspace/.comfy-image/jupyter-token.txt (or set JUPYTER_TOKEN).', flush=True)
+    if no_jupyter_auth:
+        print('Jupyter file browser: :8888/lab. Authentication disabled by JUPYTER_NO_AUTH=1.', flush=True)
+    else:
+        print('Jupyter file browser: :8888/lab. Token: /workspace/.comfy-image/jupyter-token.txt (or set JUPYTER_TOKEN).', flush=True)
     exit_code = 0
     try:
         while not stop.wait(2):

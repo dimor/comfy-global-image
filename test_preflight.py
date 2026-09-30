@@ -51,6 +51,12 @@ class Preflight(unittest.TestCase):
         self.assertTrue(app.allow_remote_access)
         self.assertTrue(app.allow_root)
 
+    def test_jupyter_no_auth_config(self):
+        config = Config()
+        exec(launcher.jupyter_config('', self.root), {'c': config})
+        app = ServerApp(config=config)
+        self.assertEqual(app.identity_provider.token, '')
+
     def test_global_volume_save_avoids_atomic_rename(self):
         manager = FileContentsManager(config=self.config(), root_dir=str(self.root))
         self.assertFalse(manager.use_atomic_writing)
@@ -93,6 +99,10 @@ class Preflight(unittest.TestCase):
         with patch.object(launcher, 'ROOT', self.root), patch.object(Path, 'is_mount', return_value=False), patch.object(launcher, 'launch') as launch:
             with self.assertRaises(SystemExit): launcher.main()
             launch.assert_not_called()
+
+    def test_manager_is_enabled_by_default(self):
+        source = Path(launcher.__file__).read_text()
+        self.assertIn("os.environ.get('ENABLE_MANAGER', '1') != '0'", source)
 
     def test_real_jupyter_authentication_and_proxy_host(self):
         # Actual Jupyter startup is tiny compared with a CUDA build. No GPU libraries required.

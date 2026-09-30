@@ -63,14 +63,15 @@ jobs:
           test -d "$RUNNER_TEMP/comfy-volume/ComfyUI/models"
           docker stop -t 60 smoke
           docker rm smoke
-          docker run -d --name smoke -e COMFY_CPU_TEST=1 -e JUPYTER_TOKEN=test-token -v "$RUNNER_TEMP/comfy-volume:/workspace" -p 8188:8188 -p 8888:8888 comfy-global:test
+          docker run -d --name smoke -e COMFY_CPU_TEST=1 -e JUPYTER_NO_AUTH=1 -v "$RUNNER_TEMP/comfy-volume:/workspace" -p 8188:8188 -p 8888:8888 comfy-global:test
           for i in $(seq 1 90); do
             test "$(docker inspect -f '{{.State.Running}}' smoke)" = true || exit 1
             if curl --fail --silent http://localhost:8188/system_stats >/dev/null; then break; fi
             sleep 2
           done
           curl --fail --silent http://localhost:8188/system_stats
-          curl --fail --silent 'http://localhost:8888/api/contents/persistence-test.txt?token=test-token' | python3 -c 'import json,sys; assert json.load(sys.stdin)["content"] == "saved across Pods"'
+          curl --fail --silent 'http://localhost:8888/api/status'
+          curl --fail --silent 'http://localhost:8888/api/contents/persistence-test.txt' | python3 -c 'import json,sys; assert json.load(sys.stdin)["content"] == "saved across Pods"'
           docker stop -t 60 smoke
           test -s "$RUNNER_TEMP/comfy-volume/.comfy-image/comfyui-current.db"
       - uses: docker/login-action@v3
@@ -83,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v4"
+          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v5"
           docker tag comfy-global:test "$IMAGE:latest"
-          docker push "$IMAGE:comfy0.38.0-cuda13.0-v4"
+          docker push "$IMAGE:comfy0.38.0-cuda13.0-v5"
           docker push "$IMAGE:latest"

@@ -1,11 +1,13 @@
 {
-  "imageName": "ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v3",
+  "imageName": "ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v5",
   "volumeMountPath": "/workspace",
   "ports": "8188/http,8888/http",
-  "containerDiskInGb": 30,
+  "containerDiskInGb": 150,
   "dockerStartCmd": "",
   "env": {
-    "JUPYTER_TOKEN": "SET_YOUR_OWN_TOKEN"
+    "JUPYTER_TOKEN": "SET_YOUR_OWN_TOKEN",
+    "JUPYTER_NO_AUTH": "1",
+    "ENABLE_MANAGER": "1"
   },
   "notes": "Attach your existing GLOBAL volume explicitly at /workspace. No network volume is required. This is a settings reference, not a complete API deployment request."
 }

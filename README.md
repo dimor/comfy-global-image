@@ -4,7 +4,7 @@ CUDA 13.0.0, PyTorch 2.13.0 (cu130), ComfyUI v0.38.0, Python 3.12 and JupyterLab
 
 ## RunPod settings
 
-Image: `ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v4` (available after the build succeeds and the GHCR package is public).
+Image: `ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v5` (available after the build succeeds and the GHCR package is public).
 
 Attach a **global** volume at `/workspace`. Explicitly set this mount path during deployment. Leave the Docker/start command empty. Expose HTTP ports `8188,8888`; use a 150 GB container disk for the H3 local cache. Set `JUPYTER_TOKEN` in the template. Without a supplied token, a random token is generated once in `/workspace/.comfy-image/jupyter-token.txt`; retrieve it through the RunPod console or set your own in the template. Manage your files through JupyterLab on port 8888.
 
@@ -22,7 +22,9 @@ The image refuses to start without a mount at `/workspace`; it cannot determine 
 | `/workspace/.cache` | Hugging Face and Torch caches |
 | `/workspace/.comfy-image` | Credentials and database snapshots |
 
-ComfyUI code, Python and preinstalled libraries are in the image at `/opt`, following the selected image + global-storage architecture. A node whose source is on the volume still needs its Python dependencies included in the image: add its installation to the Dockerfile, then rebuild. Manager is installed but disabled by default; `ENABLE_MANAGER=1` enables it. Manager installation/update actions are not a durable way to change the image and may fail on the global filesystem. Use image rebuilds for stable changes.
+ComfyUI code, Python and preinstalled libraries are in the image at `/opt`, following the selected image + global-storage architecture. A node whose source is on the volume still needs its Python dependencies included in the image: add its installation to the Dockerfile, then rebuild. Manager is enabled by default so its model download controls are available; set `ENABLE_MANAGER=0` to disable it. Manager installation/update actions are not a durable way to change the image and may fail on the global filesystem. Use image rebuilds for stable changes.
+
+Set `JUPYTER_NO_AUTH=1` to open Jupyter without a login, as used by the provided Runpod settings. Omit it to require `JUPYTER_TOKEN` instead.
 
 Existing model folders at `/workspace/runpod-slim/ComfyUI/models` and `/workspace/models` are automatically registered in place, including older `clip` and `unet` category names. Model files are not copied, moved or deleted. Other layouts require an additional model-path mapping. Attaching the same volume at a new path preserves its existing contents.
 
