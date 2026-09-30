@@ -16,7 +16,7 @@ RUN pip freeze > /opt/torch-constraints.txt && \
     pip install -c /opt/torch-constraints.txt -r /opt/ComfyUI/requirements.txt \
     -r /opt/ComfyUI/manager_requirements.txt jupyterlab && \
     pip check && pip freeze > /opt/image-packages.txt
-COPY --from=filebrowser /filebrowser /usr/local/bin/filebrowser
+COPY --from=filebrowser /bin/filebrowser /usr/local/bin/filebrowser
 COPY start.py /opt/start.py
 RUN python -m py_compile /opt/start.py && \
     cd /opt/ComfyUI && python main.py --cpu --quick-test-for-ci
