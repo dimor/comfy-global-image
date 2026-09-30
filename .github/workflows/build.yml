@@ -1,0 +1,66 @@
+name: Build and verify ComfyUI image
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make room for CUDA image
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+          df -h /
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image locally for validation
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: comfy-global:test
+          platforms: linux/amd64
+      - name: Test all interfaces and volume reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/comfy-volume"
+          docker run -d --name smoke -e COMFY_CPU_TEST=1 -e JUPYTER_TOKEN=test-token -e FILEBROWSER_PASSWORD=test-password -v "$RUNNER_TEMP/comfy-volume:/workspace" -p 8188:8188 -p 8888:8888 -p 8080:8080 comfy-global:test
+          trap 'docker logs smoke; docker rm -f smoke || true' EXIT
+          for i in $(seq 1 90); do
+            if curl --fail --silent http://localhost:8188/system_stats >/tmp/stats.json; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://localhost:8188/system_stats
+          curl --fail --silent 'http://localhost:8888/api/status?token=test-token'
+          curl --fail --silent http://localhost:8080/ >/dev/null
+          test -d "$RUNNER_TEMP/comfy-volume/ComfyUI/models"
+          docker stop -t 60 smoke
+          docker start smoke
+          for i in $(seq 1 90); do
+            if curl --fail --silent http://localhost:8188/system_stats >/dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://localhost:8188/system_stats
+          curl --fail --silent -X POST http://localhost:8080/api/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"test-password"}' >/dev/null
+          docker stop -t 60 smoke
+          test -s "$RUNNER_TEMP/comfy-volume/.comfy-image/comfyui.db"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish verified image
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v1"
+          docker tag comfy-global:test "$IMAGE:latest"
+          docker push "$IMAGE:comfy0.38.0-cuda13.0-v1"
+          docker push "$IMAGE:latest"
