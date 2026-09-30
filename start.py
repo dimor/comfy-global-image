@@ -1,5 +1,6 @@
 """Run fixed image software against an attached persistent /workspace volume."""
 import json
+from contextlib import closing
 import os
 from pathlib import Path
 import secrets
@@ -38,7 +39,7 @@ def snapshot():
     if db.exists():
         try:
             backup = LOCAL / 'comfyui-backup.db'
-            with sqlite3.connect(db, timeout=10) as src, sqlite3.connect(backup) as dst:
+            with closing(sqlite3.connect(db, timeout=10)) as src, closing(sqlite3.connect(backup)) as dst:
                 src.backup(dst)
             shutil.copyfile(backup, STATE / 'comfyui.db')
         except Exception as exc:
