@@ -19,6 +19,7 @@ jobs:
       - name: Validate startup, authentication and persistence before CUDA build
         run: |
           python test_lazy_cache.py
+          python test_runpoddirect.py
           python test_preflight.py
   build:
     needs: preflight
@@ -59,6 +60,14 @@ jobs:
           test "$(curl --fail --silent http://localhost:8188/v2/manager/version)" = "V4.2.2"
           curl --fail --silent http://localhost:8188/features | python3 -c 'import json,sys; assert json.load(sys.stdin)["extension"]["manager"]["supports_v4"] is True'
           curl --fail --silent http://localhost:8188/v2/manager/channel_url_list | python3 -c 'import json,sys; assert any(x.startswith("default::") for x in json.load(sys.stdin)["list"])'
+          curl --fail --silent http://localhost:8188/server_download/status | python3 -c 'import json,sys; assert json.load(sys.stdin) == {}'
+          curl --fail --silent http://localhost:8188/server_download/folder_paths | python3 -c 'import json,sys; assert json.load(sys.stdin)["checkpoints"][0] == "/workspace/ComfyUI/models/checkpoints"'
+          curl --fail --silent http://localhost:8188/extensions/ComfyUI-RunpodDirect/serverDownload.js | grep -q 'Download to Pod'
+          curl --fail --silent http://localhost:8188/server_download/cgroup_ram_patch_status | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["enabled"] is False and d["applied"] is False and d["settings_file"] == "/workspace/.comfy-image/runpoddirect-settings.json"'
+          test "$(curl --silent -o /tmp/rejected.json -w '%{http_code}' -X POST http://localhost:8188/server_download/start -H 'Content-Type: application/json' -d '{"url":"http://127.0.0.1/private","save_path":"checkpoints","filename":"blocked.safetensors"}')" = 400
+          test "$(curl --silent -o /tmp/traversal.json -w '%{http_code}' -X POST http://localhost:8188/server_download/start -H 'Content-Type: application/json' -d '{"url":"https://example.com/model","save_path":"checkpoints","filename":"../escape.safetensors"}')" = 400
+          curl --fail --silent -X POST http://localhost:8188/server_download/keepalive -H 'Content-Type: application/json' -d '{"enabled":false}' | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True and d["enabled"] is False'
+          test -s "$RUNNER_TEMP/comfy-volume/.comfy-image/runpoddirect-settings.json"
           curl --fail --silent 'http://localhost:8888/api/status?token=test-token' -H 'Host: example-8888.proxy.runpod.net'
           curl --fail --silent 'http://localhost:8888/lab?token=test-token' >/dev/null
           test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Accept: application/json' http://localhost:8888/api/status)" = 403
@@ -74,6 +83,7 @@ jobs:
           done
           curl --fail --silent http://localhost:8188/system_stats
           test "$(curl --fail --silent http://localhost:8188/v2/manager/version)" = "V4.2.2"
+          curl --fail --silent http://localhost:8188/server_download/keepalive_status | python3 -c 'import json,sys; assert json.load(sys.stdin)["enabled"] is False'
           curl --fail --silent 'http://localhost:8888/api/status'
           curl --fail --silent 'http://localhost:8888/api/contents/persistence-test.txt' | python3 -c 'import json,sys; assert json.load(sys.stdin)["content"] == "saved across Pods"'
           docker stop -t 60 smoke
@@ -88,7 +98,7 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v6"
+          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v7"
           docker tag comfy-global:test "$IMAGE:latest"
-          docker push "$IMAGE:comfy0.38.0-cuda13.0-v6"
+          docker push "$IMAGE:comfy0.38.0-cuda13.0-v7"
           docker push "$IMAGE:latest"

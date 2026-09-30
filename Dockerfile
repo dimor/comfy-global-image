@@ -5,7 +5,8 @@ ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 
     PATH=/opt/venv/bin:$PATH PIP_NO_CACHE_DIR=1 \
     CC=/usr/bin/gcc CXX=/usr/bin/g++ \
     COMFY_VERSION=${COMFY_VERSION} HF_HOME=/workspace/.cache/huggingface \
-    TORCH_HOME=/workspace/.cache/torch
+    TORCH_HOME=/workspace/.cache/torch \
+    RPD_SETTINGS_PATH=/workspace/.comfy-image/runpoddirect-settings.json
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-dev build-essential git ffmpeg curl ca-certificates \
     libgl1 libglib2.0-0 tini \
@@ -22,8 +23,12 @@ RUN python /opt/patch_manager.py && rm /opt/patch_manager.py
 COPY start.py /opt/start.py
 COPY lazy-cache-main.py /opt/lazy-cache-main.py
 COPY model-cache-status.py /usr/local/bin/model-cache-status
+COPY vendor/ComfyUI-RunpodDirect /opt/bundled-custom-nodes/ComfyUI-RunpodDirect
 RUN chmod +x /usr/local/bin/model-cache-status && \
-    python -m py_compile /opt/start.py /opt/lazy-cache-main.py /usr/local/bin/model-cache-status && \
+    python -m py_compile /opt/start.py /opt/lazy-cache-main.py /usr/local/bin/model-cache-status \
+      /opt/bundled-custom-nodes/ComfyUI-RunpodDirect/__init__.py && \
+    test "$(cat /opt/bundled-custom-nodes/ComfyUI-RunpodDirect/UPSTREAM_COMMIT)" = "9e32b1a09577347f77944a75096c1a1f726cd2c3" && \
+    grep -q "Download to Pod" /opt/bundled-custom-nodes/ComfyUI-RunpodDirect/web/serverDownload.js && \
     cd /opt/ComfyUI && python main.py --cpu --quick-test-for-ci
 EXPOSE 8188 8888
 WORKDIR /opt/ComfyUI

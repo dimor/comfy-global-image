@@ -34,8 +34,9 @@ def jupyter_config(token, root):
             'c.FileContentsManager.delete_to_trash = False\n')
 
 def model_paths(root, local):
+    # Image-owned nodes work even when the attached Global Volume is completely empty.
+    mappings = {'bundled_nodes': {'custom_nodes': '/opt/bundled-custom-nodes'}}
     # Register existing storage in place, including the user's previous Slim layout.
-    mappings = {}
     for index, models in enumerate((root / 'runpod-slim/ComfyUI/models', root / 'models')):
         if not models.is_dir():
             continue
@@ -50,8 +51,6 @@ def model_paths(root, local):
                     if alias != canonical:
                         categories.pop(alias, None)
         mappings[f'existing_{index}'] = {'base_path': str(models), **categories}
-    if not mappings:
-        return None
     target = local / 'extra-model-paths.yaml'
     target.write_text(json.dumps(mappings), encoding='utf-8')  # JSON is valid YAML.
     return target

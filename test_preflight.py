@@ -78,13 +78,15 @@ class Preflight(unittest.TestCase):
         for name in ('loras', 'clip', 'unet'): (models / name).mkdir(parents=True)
         source = models / 'loras/example.safetensors'; source.write_bytes(b'sentinel')
         result = yaml.safe_load(launcher.model_paths(self.root, self.local).read_text())
+        self.assertEqual(result['bundled_nodes']['custom_nodes'], '/opt/bundled-custom-nodes')
         self.assertEqual(result['existing_0']['base_path'], str(models))
         self.assertEqual(result['existing_0']['text_encoders'], 'clip')
         self.assertEqual(result['existing_0']['diffusion_models'], 'unet')
         self.assertEqual(source.read_bytes(), b'sentinel')
 
-    def test_fresh_volume_needs_no_extra_model_config(self):
-        self.assertIsNone(launcher.model_paths(self.root, self.local))
+    def test_fresh_volume_loads_image_bundled_nodes(self):
+        result = yaml.safe_load(launcher.model_paths(self.root, self.local).read_text())
+        self.assertEqual(result, {'bundled_nodes': {'custom_nodes': '/opt/bundled-custom-nodes'}})
 
     def test_snapshot_restore_falls_back_after_interrupted_write(self):
         dbpath = self.local / 'comfyui.db'

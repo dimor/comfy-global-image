@@ -4,7 +4,7 @@ CUDA 13.0.0, PyTorch 2.13.0 (cu130), ComfyUI v0.38.0, Python 3.12 and JupyterLab
 
 ## RunPod settings
 
-Image: `ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v6` (available after the build succeeds and the GHCR package is public).
+Image: `ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v7` (available after the build succeeds and the GHCR package is public).
 
 Attach a **global** volume at `/workspace`. Explicitly set this mount path during deployment. Leave the Docker/start command empty. Expose HTTP ports `8188,8888`; use a 150 GB container disk for the H3 local cache. The supplied settings use `JUPYTER_NO_AUTH=1`, so JupyterLab opens directly on port 8888. For a protected Jupyter instead, remove that variable and set `JUPYTER_TOKEN`; without a supplied token, a random one is generated once in `/workspace/.comfy-image/jupyter-token.txt`.
 
@@ -44,7 +44,7 @@ Published versions can be pinned by image digest for stronger reproducibility. K
 
 ## Built-in on-demand model cache
 
-Version v4 contains the cache launcher at `/opt/lazy-cache-main.py`. No script on
+The image contains the cache launcher at `/opt/lazy-cache-main.py`. No script on
 the volume, command override, model list or image rebuild is required. A brand-new
 empty Global Volume starts normally.
 
@@ -63,6 +63,22 @@ same details, including Global source and local destination, are stored in
 logs. Jupyter and Comfy start immediately; copying begins when the selected model is first used.
 Set `MODEL_CACHE_MIN_MB` to change the 64 MB threshold and
 `MODEL_CACHE_RESERVE_GB` to change the 10 GB free-space reserve.
+
+## Built-in Download to Pod
+
+The hardened `ComfyUI-RunpodDirect` extension is fixed inside the image and is
+available even with a completely empty Global Volume. Its **Download to Pod**
+button writes new models directly into `/workspace/ComfyUI/models`, so they stay
+on the Global Volume and are available to later Pods without rebuilding the
+image. Runtime settings persist at
+`/workspace/.comfy-image/runpoddirect-settings.json`.
+
+Downloads use four connections by default, verify size and optional SHA-256,
+keep incomplete files separate, reject private-network URLs and unsafe paths,
+and expose live progress in the ComfyUI interface. Set
+`RPD_DOWNLOAD_CONNECTIONS` to change the connection count. The optional cgroup
+RAM override is disabled unless `RPD_ENABLE_CGROUP_RAM_PATCH=1` is explicitly
+set.
 
 On the same RTX PRO 4000 pod ($0.57/hour compute), replaying the previous
 five-second, 20-step H3 workflow after the container restart succeeded in 193.82
