@@ -54,8 +54,7 @@ class Preflight(unittest.TestCase):
     def test_jupyter_no_auth_config(self):
         config = Config()
         exec(launcher.jupyter_config('', self.root), {'c': config})
-        app = ServerApp(config=config)
-        self.assertEqual(app.identity_provider.token, '')
+        self.assertEqual(config.IdentityProvider.token, '')
 
     def test_global_volume_save_avoids_atomic_rename(self):
         manager = FileContentsManager(config=self.config(), root_dir=str(self.root))
