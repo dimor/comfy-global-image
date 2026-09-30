@@ -27,7 +27,8 @@ COPY vendor/ComfyUI-RunpodDirect /opt/bundled-custom-nodes/ComfyUI-RunpodDirect
 RUN chmod +x /usr/local/bin/model-cache-status && \
     python -m py_compile /opt/start.py /opt/lazy-cache-main.py /usr/local/bin/model-cache-status \
       /opt/bundled-custom-nodes/ComfyUI-RunpodDirect/__init__.py && \
-    test "$(cat /opt/bundled-custom-nodes/ComfyUI-RunpodDirect/UPSTREAM_COMMIT)" = "9e32b1a09577347f77944a75096c1a1f726cd2c3" && \
+    grep -Fxq "MadiatorLabs/ComfyUI-RunpodDirect@9e32b1a09577347f77944a75096c1a1f726cd2c3" \
+      /opt/bundled-custom-nodes/ComfyUI-RunpodDirect/UPSTREAM_COMMIT && \
     grep -q "Download to Pod" /opt/bundled-custom-nodes/ComfyUI-RunpodDirect/web/serverDownload.js && \
     cd /opt/ComfyUI && python main.py --cpu --quick-test-for-ci
 EXPOSE 8188 8888

@@ -73,6 +73,13 @@ class RunpodDirectTests(unittest.TestCase):
     def setUpClass(cls):
         cls.module = _load_module()
 
+    def test_vendored_upstream_commit_is_fixed(self):
+        marker = (MODULE_PATH.parent / "UPSTREAM_COMMIT").read_text().strip()
+        self.assertEqual(
+            marker,
+            "MadiatorLabs/ComfyUI-RunpodDirect@9e32b1a09577347f77944a75096c1a1f726cd2c3",
+        )
+
     def test_url_validation(self):
         self.assertEqual(
             self.module._parse_download_url("https://huggingface.co/a/b").hostname,
