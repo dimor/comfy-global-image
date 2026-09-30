@@ -1,12 +1,12 @@
 # ComfyUI with global storage
 
-CUDA 13.0.0, PyTorch 2.13.0 (cu130), ComfyUI v0.38.0, Python 3.12, JupyterLab and FileBrowser. Linux amd64, intended for RunPod GPU Pods including RTX 5090. A build is fixed; nothing upgrades at Pod startup. The Actions job checks CPU startup and the three interfaces before publishing. GPU inference and actual global-volume behavior still require a RunPod test.
+CUDA 13.0.0, PyTorch 2.13.0 (cu130), ComfyUI v0.38.0, Python 3.12 and JupyterLab 4.6.4 with its file browser. Linux amd64, intended for RunPod GPU Pods including RTX 5090. A build is fixed; nothing upgrades at Pod startup. Fast preflight tests run before the CUDA build. The built image must then pass CPU startup, interface and fresh-container persistence tests before publishing. GPU inference and actual global-volume behavior still require a RunPod test.
 
 ## RunPod settings
 
-Image: `ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v1` (available after the build succeeds and the GHCR package is public).
+Image: `ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v2` (available after the build succeeds and the GHCR package is public).
 
-Attach your existing **global** volume at `/workspace`. Explicitly set this mount path during deployment. Leave the Docker/start command empty. Expose HTTP ports `8188,8888,8080`; use a 30 GB container disk initially. Set `JUPYTER_TOKEN` and `FILEBROWSER_PASSWORD` in the template. FileBrowser username is `admin`. Without supplied credentials, random credentials are generated once in `/workspace/.comfy-image/`; retrieve them through the RunPod console or set your own in the template.
+Attach your existing **global** volume at `/workspace`. Explicitly set this mount path during deployment. Leave the Docker/start command empty. Expose HTTP ports `8188,8888`; use a 30 GB container disk initially. Set `JUPYTER_TOKEN` in the template. Without a supplied token, a random token is generated once in `/workspace/.comfy-image/jupyter-token.txt`; retrieve it through the RunPod console or set your own in the template. Manage your files through JupyterLab on port 8888.
 
 The image refuses to start without a mount at `/workspace`; it cannot determine the volume's type, so select the global volume in RunPod. There are no startup pip installs, git pulls or automatic model downloads. A new host must still pull the container image. Remote storage and model loading also take time.
 
@@ -24,9 +24,9 @@ The image refuses to start without a mount at `/workspace`; it cannot determine 
 
 ComfyUI code, Python and preinstalled libraries are in the image at `/opt`, following the selected image + global-storage architecture. A node whose source is on the volume still needs its Python dependencies included in the image: add its installation to the Dockerfile, then rebuild. Manager is installed but disabled by default; `ENABLE_MANAGER=1` enables it. Manager installation/update actions are not a durable way to change the image and may fail on the global filesystem. Use image rebuilds for stable changes.
 
-Existing model folders elsewhere on the volume are not automatically moved or deleted. Put them into the paths above, or supply ComfyUI's extra model paths configuration in a follow-up revision. Attaching the same volume at a new path preserves its existing contents.
+Existing model folders at `/workspace/runpod-slim/ComfyUI/models` and `/workspace/models` are automatically registered in place, including older `clip` and `unet` category names. Model files are not copied, moved or deleted. Other layouts require an additional model-path mapping. Attaching the same volume at a new path preserves its existing contents.
 
-Global volumes lack locking and atomic rename. SQLite and FileBrowser databases therefore run locally. ComfyUI's database gets a SQLite backup to the volume every two minutes and at graceful shutdown. FileBrowser's configuration database is saved at graceful shutdown. Abrupt termination can lose changes since the last snapshot. Ordinary workflow/settings/result files are stored directly on the volume. Use one writing Pod at a time. Git clones, dependency installation and arbitrary custom nodes may require POSIX features absent on global volumes.
+Global volumes lack locking and atomic rename. ComfyUI's SQLite database therefore runs locally and gets a consistent backup to the volume every two minutes and at graceful shutdown. Startup validates snapshots and falls back to the previous snapshot if the current one is incomplete. Abrupt termination can lose database changes since the last snapshot. Ordinary workflow/settings/result files are stored directly on the volume. Jupyter file saves disable atomic renames and trash moves for this filesystem. Use one writing Pod at a time. Git clones, dependency installation and arbitrary custom nodes may require POSIX features absent on global volumes.
 
 ## Build
 

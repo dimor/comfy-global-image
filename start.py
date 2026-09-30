@@ -18,32 +18,106 @@ STATE = ROOT / '.comfy-image'
 LOCAL = Path('/tmp/comfy-image')
 stop = threading.Event()
 children = []
+snapshot_lock = threading.Lock()
+
+def jupyter_config(token, root):
+    return ('c.IdentityProvider.token = ' + repr(token) + '\n' +
+            'c.ServerApp.root_dir = ' + repr(str(root)) + '\n' +
+            'c.ServerApp.ip = "0.0.0.0"\n' +
+            'c.ServerApp.port = 8888\n' +
+            'c.ServerApp.port_retries = 0\n' +
+            'c.ServerApp.allow_root = True\n' +
+            'c.ServerApp.allow_remote_access = True\n' +
+            'c.ServerApp.open_browser = False\n' +
+            'c.ServerApp.log_level = 30\n' +
+            'c.FileContentsManager.use_atomic_writing = False\n' +
+            'c.FileContentsManager.delete_to_trash = False\n')
+
+def model_paths(root, local):
+    # Register existing storage in place, including the user's previous Slim layout.
+    mappings = {}
+    for index, models in enumerate((root / 'runpod-slim/ComfyUI/models', root / 'models')):
+        if not models.is_dir():
+            continue
+        categories = {p.name: p.name for p in models.iterdir() if p.is_dir()}
+        for canonical, aliases in {'text_encoders': ('text_encoders', 'clip'),
+                                   'diffusion_models': ('diffusion_models', 'unet'),
+                                   'controlnet': ('controlnet', 't2i_adapter')}.items():
+            present = [name for name in aliases if (models / name).is_dir()]
+            if present:
+                categories[canonical] = '\n'.join(present)
+                for alias in aliases:
+                    if alias != canonical:
+                        categories.pop(alias, None)
+        mappings[f'existing_{index}'] = {'base_path': str(models), **categories}
+    if not mappings:
+        return None
+    target = local / 'extra-model-paths.yaml'
+    target.write_text(json.dumps(mappings), encoding='utf-8')  # JSON is valid YAML.
+    return target
 
 def secret(name):
     target = STATE / name
     if target.exists():
-        return target.read_text().strip()
+        value = target.read_text().strip()
+        if len(value) >= 24:
+            return value
     value = secrets.token_urlsafe(24)
     target.write_text(value + '\n')
     return value
 
 def restore_databases():
-    for name in ('comfyui.db', 'filebrowser.db'):
+    # Keep previous snapshots intact; validate local copies before using them.
+    for name in ('comfyui-current.db', 'comfyui-previous.db', 'comfyui.db'):
         saved = STATE / name
         if saved.exists():
-            shutil.copyfile(saved, LOCAL / name)
+            candidate = LOCAL / 'restore-check.db'
+            shutil.copyfile(saved, candidate)
+            with candidate.open('rb') as stream:
+                if stream.read(16) != b'SQLite format 3\x00':
+                    continue
+            try:
+                with closing(sqlite3.connect(candidate)) as db:
+                    if db.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+                        continue
+                shutil.copyfile(candidate, LOCAL / 'comfyui.db')
+                return
+            except sqlite3.DatabaseError:
+                print(f'Skipping incomplete database snapshot: {name}', flush=True)
 
 def snapshot():
     # SQLite's backup API yields a consistent snapshot without copying a live WAL.
     db = LOCAL / 'comfyui.db'
     if db.exists():
         try:
-            backup = LOCAL / 'comfyui-backup.db'
-            with closing(sqlite3.connect(db, timeout=10)) as src, closing(sqlite3.connect(backup)) as dst:
-                src.backup(dst)
-            shutil.copyfile(backup, STATE / 'comfyui.db')
+            with snapshot_lock:
+                _snapshot(db)
         except Exception as exc:
             print(f'Database snapshot deferred: {exc}', flush=True)
+
+def _snapshot(db):
+    backup = LOCAL / 'comfyui-backup.db'
+    deadline = time.monotonic() + 15
+    def progress(*_):
+        if time.monotonic() > deadline:
+            raise TimeoutError('snapshot exceeded 15 seconds')
+    with closing(sqlite3.connect(db, timeout=10)) as src, closing(sqlite3.connect(backup)) as dst:
+        src.backup(dst, pages=128, progress=progress)
+    current = STATE / 'comfyui-current.db'
+    if current.exists():
+        # Only rotate a valid snapshot; an interrupted write must not replace fallback.
+        check = LOCAL / 'rotate-check.db'
+        shutil.copyfile(current, check)
+        try:
+            with check.open('rb') as stream:
+                header_valid = stream.read(16) == b'SQLite format 3\x00'
+            if header_valid:
+                with closing(sqlite3.connect(check)) as connection:
+                    if connection.execute('PRAGMA quick_check').fetchone()[0] == 'ok':
+                        shutil.copyfile(check, STATE / 'comfyui-previous.db')
+        except sqlite3.DatabaseError:
+            pass
+    shutil.copyfile(backup, current)
 
 def periodic_snapshot():
     while not stop.wait(120):
@@ -68,24 +142,11 @@ def main():
     (LOCAL / 'temp').mkdir(exist_ok=True)
     restore_databases()
     token = os.environ.get('JUPYTER_TOKEN') or secret('jupyter-token.txt')
-    password = os.environ.get('FILEBROWSER_PASSWORD') or secret('filebrowser-password.txt')
-    fb = LOCAL / 'filebrowser.db'
-    if not fb.exists():
-        subprocess.run(['filebrowser', '-d', str(fb), 'config', 'init'], check=True)
-        subprocess.run(['filebrowser', '-d', str(fb), 'users', 'add', 'admin', password, '--perm.admin'], check=True, stdout=subprocess.DEVNULL)
-        shutil.copyfile(fb, STATE / 'filebrowser.db')
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
-    launch('FileBrowser :8080', ['filebrowser', '-d', str(fb), '-r', str(ROOT), '-a', '0.0.0.0', '-p', '8080'])
     # Config file avoids printing the token in the command line or Jupyter startup URL.
     config = LOCAL / 'jupyter_config.py'
-    config.write_text('c.IdentityProvider.token = ' + repr(token) + '\n' +
-                      'c.ServerApp.root_dir = "/workspace"\n' +
-                      'c.ServerApp.ip = "0.0.0.0"\n' +
-                      'c.ServerApp.port = 8888\n' +
-                      'c.ServerApp.allow_root = True\n' +
-                      'c.ServerApp.open_browser = False\n' +
-                      'c.ServerApp.log_level = 30\n')
+    config.write_text(jupyter_config(token, ROOT), encoding='utf-8')
     launch('JupyterLab :8888', ['jupyter', 'lab', '--config', str(config)])
     args = ['python', '/opt/ComfyUI/main.py', '--listen', '0.0.0.0', '--port', '8188',
             '--base-directory', str(DATA), '--user-directory', str(DATA / 'user'),
@@ -96,11 +157,14 @@ def main():
     # Manager is available on demand; installation changes need an image rebuild.
     if os.environ.get('ENABLE_MANAGER') == '1':
         args.append('--enable-manager')
+    extra_paths = model_paths(ROOT, LOCAL)
+    if extra_paths:
+        args.extend(['--extra-model-paths-config', str(extra_paths)])
     launch('ComfyUI :8188', args)
     thread = threading.Thread(target=periodic_snapshot, daemon=True)
     thread.start()
     print('Persistent files: /workspace/ComfyUI. No git pull, pip install or model download at startup.', flush=True)
-    print('Jupyter token and FileBrowser admin password: /workspace/.comfy-image/ (or set template environment variables).', flush=True)
+    print('Jupyter file browser: :8888/lab. Token: /workspace/.comfy-image/jupyter-token.txt (or set JUPYTER_TOKEN).', flush=True)
     exit_code = 0
     try:
         while not stop.wait(2):
@@ -123,9 +187,6 @@ def main():
                 os.killpg(child.pid, signal.SIGKILL)
                 child.wait()
         snapshot()
-        # FileBrowser uses BoltDB: copy only after its process has exited.
-        if fb.exists():
-            shutil.copyfile(fb, STATE / 'filebrowser.db')
     return exit_code
 
 if __name__ == '__main__':

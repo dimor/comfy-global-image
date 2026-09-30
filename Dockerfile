@@ -1,4 +1,3 @@
-FROM filebrowser/filebrowser:v2.63.23 AS filebrowser
 FROM nvidia/cuda:13.0.0-runtime-ubuntu24.04
 
 ARG COMFY_VERSION=v0.38.0
@@ -14,13 +13,12 @@ RUN pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.p
 RUN git clone --depth 1 --branch ${COMFY_VERSION} https://github.com/Comfy-Org/ComfyUI.git /opt/ComfyUI
 RUN pip freeze > /opt/torch-constraints.txt && \
     pip install -c /opt/torch-constraints.txt -r /opt/ComfyUI/requirements.txt \
-    -r /opt/ComfyUI/manager_requirements.txt jupyterlab && \
+    -r /opt/ComfyUI/manager_requirements.txt jupyterlab==4.6.4 jupyter-server==2.21.1 && \
     pip check && pip freeze > /opt/image-packages.txt
-COPY --from=filebrowser /bin/filebrowser /usr/local/bin/filebrowser
 COPY start.py /opt/start.py
 RUN python -m py_compile /opt/start.py && \
     cd /opt/ComfyUI && python main.py --cpu --quick-test-for-ci
-EXPOSE 8188 8888 8080
+EXPOSE 8188 8888
 WORKDIR /opt/ComfyUI
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["python", "/opt/start.py"]

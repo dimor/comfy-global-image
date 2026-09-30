@@ -4,3 +4,4 @@ __pycache__
 *.zip
 README.md
 runpod-settings.json
+test_preflight.py
