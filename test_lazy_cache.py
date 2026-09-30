@@ -27,9 +27,10 @@ class LazyCacheTest(unittest.TestCase):
                                            'folder_paths': fake_paths}), \
                 patch.object(cache_launcher, 'CACHE', Path(temporary)), \
                 patch.object(cache_launcher, 'install', lambda _paths: events.append('paths')), \
-                patch.object(cache_launcher.runpy, 'run_path', lambda *_args, **_kwargs: events.append('main')):
+                patch.object(cache_launcher.runpy, 'run_path',
+                             lambda path, **_kwargs: events.append(('main', path))):
             cache_launcher.main()
-        self.assertEqual(events, ['arguments', 'paths', 'main'])
+        self.assertEqual(events, ['arguments', 'paths', ('main', '/opt/ComfyUI/main.py')])
 
     def test_only_requested_model_is_copied_and_reported(self):
         with tempfile.TemporaryDirectory() as temporary:
