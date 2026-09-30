@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 tini \
     && rm -rf /var/lib/apt/lists/*
 RUN python3 -m venv /opt/venv && pip install --upgrade pip
-RUN pip install torch==2.13.0 torchvision==0.28.0 torchaudio==2.13.0 --index-url https://download.pytorch.org/whl/cu130
+RUN pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cu130
 RUN git clone --depth 1 --branch ${COMFY_VERSION} https://github.com/Comfy-Org/ComfyUI.git /opt/ComfyUI
 RUN pip freeze > /opt/torch-constraints.txt && \
     pip install -c /opt/torch-constraints.txt -r /opt/ComfyUI/requirements.txt \

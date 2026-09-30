@@ -1,6 +1,6 @@
 # ComfyUI with global storage
 
-CUDA 13.0.0, PyTorch/TorchAudio 2.13.0 (cu130), ComfyUI v0.38.0, Python 3.12 and JupyterLab 4.6.4 with its file browser. Linux amd64, intended for RunPod GPU Pods including RTX 5090. A build is fixed; nothing upgrades at Pod startup. Fast preflight tests run before the CUDA build. The built image must then pass CPU startup, Manager API, interface and fresh-container persistence tests before publishing. GPU inference and actual global-volume behavior still require a RunPod test.
+CUDA 13.0.0, PyTorch 2.13.0 (cu130), ComfyUI v0.38.0, Python 3.12 and JupyterLab 4.6.4 with its file browser. Linux amd64, intended for RunPod GPU Pods including RTX 5090. A build is fixed; nothing upgrades at Pod startup. Fast preflight tests run before the CUDA build. The built image must then pass CPU startup, Manager API, interface and fresh-container persistence tests before publishing. GPU inference and actual global-volume behavior still require a RunPod test.
 
 ## RunPod settings
 
