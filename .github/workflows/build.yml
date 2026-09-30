@@ -17,7 +17,9 @@ jobs:
           python-version: '3.12'
       - run: pip install jupyter-server==2.21.1 pyyaml
       - name: Validate startup, authentication and persistence before CUDA build
-        run: python test_preflight.py
+        run: |
+          python test_lazy_cache.py
+          python test_preflight.py
   build:
     needs: preflight
     runs-on: ubuntu-latest

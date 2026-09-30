@@ -54,8 +54,11 @@ stay on Global. Cache files are temporary and must be copied again after a fresh
 container starts. If local space is insufficient, Comfy falls back to the Global
 file instead of failing the workflow.
 
-Progress is visible in `/workspace/ComfyUI/model-cache-status.json`. Jupyter and
-Comfy start immediately; copying begins when the selected model is first used.
+Run `model-cache-status --watch` in a Jupyter terminal for a live table with each
+requested model's state, percentage, copied and total bytes, speed, and ETA. The
+same details, including Global source and local destination, are stored in
+`/workspace/ComfyUI/model-cache-status.json` and progress also appears in pod
+logs. Jupyter and Comfy start immediately; copying begins when the selected model is first used.
 Set `MODEL_CACHE_MIN_MB` to change the 64 MB threshold and
 `MODEL_CACHE_RESERVE_GB` to change the 10 GB free-space reserve.
 

@@ -19,7 +19,9 @@ RUN pip freeze > /opt/torch-constraints.txt && \
     pip check && pip freeze > /opt/image-packages.txt
 COPY start.py /opt/start.py
 COPY lazy-cache-main.py /opt/lazy-cache-main.py
-RUN python -m py_compile /opt/start.py /opt/lazy-cache-main.py && \
+COPY model-cache-status.py /usr/local/bin/model-cache-status
+RUN chmod +x /usr/local/bin/model-cache-status && \
+    python -m py_compile /opt/start.py /opt/lazy-cache-main.py /usr/local/bin/model-cache-status && \
     cd /opt/ComfyUI && python main.py --cpu --quick-test-for-ci
 EXPOSE 8188 8888
 WORKDIR /opt/ComfyUI

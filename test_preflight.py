@@ -24,10 +24,6 @@ spec = importlib.util.spec_from_file_location('launcher', Path(__file__).with_na
 launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 
-cache_spec = importlib.util.spec_from_file_location('cache_launcher', Path(__file__).with_name('lazy-cache-main.py'))
-cache_launcher = importlib.util.module_from_spec(cache_spec)
-cache_spec.loader.exec_module(cache_launcher)
-
 class Preflight(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -80,29 +76,6 @@ class Preflight(unittest.TestCase):
 
     def test_fresh_volume_needs_no_extra_model_config(self):
         self.assertIsNone(launcher.model_paths(self.root, self.local))
-
-    def test_on_demand_cache_copies_only_requested_model(self):
-        source = self.root / 'models'; source.mkdir()
-        requested = source / 'requested.safetensors'; requested.write_bytes(b'requested-model')
-        unused = source / 'unused.safetensors'; unused.write_bytes(b'unused-model')
-        class FakePaths:
-            @staticmethod
-            def get_full_path(_folder, filename):
-                path = source / filename
-                return str(path) if path.is_file() else None
-        cache = self.local / 'model-cache'; cache.mkdir()
-        status = self.root / 'ComfyUI/model-cache-status.json'
-        with patch.object(cache_launcher, 'SOURCE_ROOTS', (source,)), \
-                patch.object(cache_launcher, 'CACHE', cache), \
-                patch.object(cache_launcher, 'STATUS', status), \
-                patch.object(cache_launcher, 'MIN_BYTES', 0), \
-                patch.object(cache_launcher, 'RESERVE_BYTES', 0):
-            cache_launcher.install(FakePaths)
-            resolved = FakePaths.get_full_path('checkpoints', requested.name)
-        self.assertEqual(Path(resolved).read_bytes(), requested.read_bytes())
-        self.assertTrue(str(resolved).startswith(str(cache)))
-        self.assertFalse((cache / 'checkpoints' / unused.name).exists())
-        self.assertEqual(json.loads(status.read_text())['state'], 'ready')
 
     def test_snapshot_restore_falls_back_after_interrupted_write(self):
         dbpath = self.local / 'comfyui.db'
