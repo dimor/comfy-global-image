@@ -18,9 +18,10 @@ RUN pip freeze > /opt/torch-constraints.txt && \
     -r /opt/ComfyUI/manager_requirements.txt jupyterlab==4.6.4 jupyter-server==2.21.1 && \
     pip check && pip freeze > /opt/image-packages.txt
 COPY start.py /opt/start.py
-RUN python -m py_compile /opt/start.py && \
+COPY cache-start.py /opt/cache-start.py
+RUN python -m py_compile /opt/start.py /opt/cache-start.py && \
     cd /opt/ComfyUI && python main.py --cpu --quick-test-for-ci
 EXPOSE 8188 8888
 WORKDIR /opt/ComfyUI
 ENTRYPOINT ["/usr/bin/tini", "-s", "--"]
-CMD ["python", "/opt/start.py"]
+CMD ["python", "/opt/cache-start.py"]

@@ -24,6 +24,10 @@ spec = importlib.util.spec_from_file_location('launcher', Path(__file__).with_na
 launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 
+cache_spec = importlib.util.spec_from_file_location('cache_launcher', Path(__file__).with_name('cache-start.py'))
+cache_launcher = importlib.util.module_from_spec(cache_spec)
+cache_spec.loader.exec_module(cache_launcher)
+
 class Preflight(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -76,6 +80,33 @@ class Preflight(unittest.TestCase):
 
     def test_fresh_volume_needs_no_extra_model_config(self):
         self.assertIsNone(launcher.model_paths(self.root, self.local))
+
+    def test_cache_launcher_allows_fresh_empty_volume(self):
+        data = self.root / 'ComfyUI'; data.mkdir()
+        with patch.object(cache_launcher, 'original_paths', return_value=None), \
+                patch.object(cache_launcher, 'CACHE', self.local / 'model-cache'):
+            result = cache_launcher.cached_paths(self.root, self.local)
+        self.assertIsNone(result)
+        status = json.loads((data / 'h3-cache-status.json').read_text())
+        self.assertEqual(status['state'], 'skipped')
+        self.assertEqual(len(status['missing']), 5)
+
+    def test_complete_h3_set_is_copied_and_registered_first(self):
+        source = self.root / 'runpod-slim/ComfyUI/models'
+        (self.root / 'ComfyUI').mkdir()
+        for index, name in enumerate(cache_launcher.FILES):
+            target = source / name; target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(f'model-{index}'.encode())
+        cache = self.local / 'model-cache'
+        with patch.object(cache_launcher, 'original_paths', return_value=None), \
+                patch.object(cache_launcher, 'CACHE', cache):
+            config = cache_launcher.cached_paths(self.root, self.local)
+        mapping = json.loads(config.read_text())['h3_local_cache']
+        self.assertTrue(mapping['is_default'])
+        self.assertEqual(mapping['base_path'], str(cache))
+        for name in cache_launcher.FILES:
+            self.assertEqual((cache / name).read_bytes(), (source / name).read_bytes())
+        self.assertEqual(json.loads((self.root / 'ComfyUI/h3-cache-status.json').read_text())['state'], 'ready')
 
     def test_snapshot_restore_falls_back_after_interrupted_write(self):
         dbpath = self.local / 'comfyui.db'

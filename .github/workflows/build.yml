@@ -81,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v3"
+          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v4"
           docker tag comfy-global:test "$IMAGE:latest"
-          docker push "$IMAGE:comfy0.38.0-cuda13.0-v3"
+          docker push "$IMAGE:comfy0.38.0-cuda13.0-v4"
           docker push "$IMAGE:latest"
