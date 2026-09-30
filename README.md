@@ -4,7 +4,7 @@ CUDA 13.0.0, PyTorch 2.13.0 (cu130), ComfyUI v0.38.0, Python 3.12 and JupyterLab
 
 ## RunPod settings
 
-Image: `ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v2` (available after the build succeeds and the GHCR package is public).
+Image: `ghcr.io/dimor/comfy-global-image:comfy0.38.0-cuda13.0-v3` (available after the build succeeds and the GHCR package is public).
 
 Attach your existing **global** volume at `/workspace`. Explicitly set this mount path during deployment. Leave the Docker/start command empty. Expose HTTP ports `8188,8888`; use a 30 GB container disk initially. Set `JUPYTER_TOKEN` in the template. Without a supplied token, a random token is generated once in `/workspace/.comfy-image/jupyter-token.txt`; retrieve it through the RunPod console or set your own in the template. Manage your files through JupyterLab on port 8888.
 

@@ -43,6 +43,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          docker run --rm --entrypoint bash comfy-global:test -lc \
+            'test "$CC" = /usr/bin/gcc; printf "int main(void){return 0;}\n" | "$CC" -x c - -o /tmp/compiler-test; /tmp/compiler-test'
           mkdir -p "$RUNNER_TEMP/comfy-volume"
           docker run -d --name smoke -e COMFY_CPU_TEST=1 -e JUPYTER_TOKEN=test-token -v "$RUNNER_TEMP/comfy-volume:/workspace" -p 8188:8188 -p 8888:8888 comfy-global:test
           trap 'docker logs smoke; docker rm -f smoke || true' EXIT
@@ -79,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v2"
+          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v3"
           docker tag comfy-global:test "$IMAGE:latest"
-          docker push "$IMAGE:comfy0.38.0-cuda13.0-v2"
+          docker push "$IMAGE:comfy0.38.0-cuda13.0-v3"
           docker push "$IMAGE:latest"

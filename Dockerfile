@@ -3,10 +3,12 @@ FROM nvidia/cuda:13.0.0-runtime-ubuntu24.04
 ARG COMFY_VERSION=v0.38.0
 ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     PATH=/opt/venv/bin:$PATH PIP_NO_CACHE_DIR=1 \
+    CC=/usr/bin/gcc CXX=/usr/bin/g++ \
     COMFY_VERSION=${COMFY_VERSION} HF_HOME=/workspace/.cache/huggingface \
     TORCH_HOME=/workspace/.cache/torch
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv git ffmpeg curl ca-certificates libgl1 libglib2.0-0 tini \
+    python3 python3-venv python3-dev build-essential git ffmpeg curl ca-certificates \
+    libgl1 libglib2.0-0 tini \
     && rm -rf /var/lib/apt/lists/*
 RUN python3 -m venv /opt/venv && pip install --upgrade pip
 RUN pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cu130
@@ -20,5 +22,5 @@ RUN python -m py_compile /opt/start.py && \
     cd /opt/ComfyUI && python main.py --cpu --quick-test-for-ci
 EXPOSE 8188 8888
 WORKDIR /opt/ComfyUI
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "-s", "--"]
 CMD ["python", "/opt/start.py"]
