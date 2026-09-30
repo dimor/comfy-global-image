@@ -40,24 +40,24 @@ docker build -t comfy-global-image .
 
 Published versions can be pinned by image digest for stronger reproducibility. Keep using the fixed version tag rather than `latest` for repeat deployments. Record the digest after a successful build. The GitHub build does not rent a GPU or deploy a Pod.
 
-## Built-in H3 local cache
+## Built-in on-demand model cache
 
-Version v4 contains the cache launcher at `/opt/cache-start.py` and runs it by
-default. No script on the volume and no command override are required. A brand-new
-empty Global Volume starts normally. After all five expected H3 files are installed
-in the Slim model layout, the next container start automatically enables caching.
+Version v4 contains the cache launcher at `/opt/lazy-cache-main.py`. No script on
+the volume, command override, model list or image rebuild is required. A brand-new
+empty Global Volume starts normally.
 
-The launcher copies five specific H3 files from the existing Slim model layout
-to `/tmp/comfy-model-cache`, checks disk capacity and copied sizes, then registers
-local paths first in Comfy's search order. Other models keep loading from Global.
-Inputs, outputs, settings and original weights stay on Global. Cache files are
-temporary and must be copied again after a fresh container starts.
+When a workflow first requests a model, LoRA, VAE or text encoder of at least 64
+MB, Comfy transparently copies only that selected file to `/tmp/comfy-model-cache`
+and loads the local copy. Unused models stay only on Global. Later uses in the same
+container reuse the cached file. Inputs, outputs, settings and original weights
+stay on Global. Cache files are temporary and must be copied again after a fresh
+container starts. If local space is insufficient, Comfy falls back to the Global
+file instead of failing the workflow.
 
-Progress is visible in `/workspace/ComfyUI/h3-cache-status.json`. Jupyter starts
-before copying; Comfy starts after the cache is ready. The first live test copied
-42,030,035,159 bytes in 200.9 seconds. A separate live check resolved all five H3
-files to local paths and parsed their safetensors headers successfully. This
-transfer measurement is not an inference performance guarantee.
+Progress is visible in `/workspace/ComfyUI/model-cache-status.json`. Jupyter and
+Comfy start immediately; copying begins when the selected model is first used.
+Set `MODEL_CACHE_MIN_MB` to change the 64 MB threshold and
+`MODEL_CACHE_RESERVE_GB` to change the 10 GB free-space reserve.
 
 On the same RTX PRO 4000 pod ($0.57/hour compute), replaying the previous
 five-second, 20-step H3 workflow after the container restart succeeded in 193.82
@@ -67,5 +67,5 @@ excluding container boot and verification work. This is one measured comparison;
 other models, hosts and compilation state may behave differently. The test video
 was saved to the persistent output directory as `video/H3_local_cache_test_00001_.mp4`.
 
-The old v3 test template `hyy4uo6j7p` depends on a script stored on the original
-volume. Replace it with the v4 template after the fresh-volume test passes.
+The old v3 test template `hyy4uo6j7p` depends on an H3-specific script stored on
+the original volume. Replace it with the v4 template after the fresh-volume test.

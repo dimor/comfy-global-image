@@ -148,7 +148,7 @@ def main():
     config = LOCAL / 'jupyter_config.py'
     config.write_text(jupyter_config(token, ROOT), encoding='utf-8')
     launch('JupyterLab :8888', ['jupyter', 'lab', '--config', str(config)])
-    args = ['python', '/opt/ComfyUI/main.py', '--listen', '0.0.0.0', '--port', '8188',
+    args = ['python', '/opt/lazy-cache-main.py', '--listen', '0.0.0.0', '--port', '8188',
             '--base-directory', str(DATA), '--user-directory', str(DATA / 'user'),
             '--database-url', 'sqlite:////tmp/comfy-image/comfyui.db',
             '--temp-directory', str(LOCAL / 'temp')]
