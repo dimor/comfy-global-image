@@ -25,6 +25,8 @@ jobs:
           load: true
           tags: comfy-global:test
           platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
       - name: Test all interfaces and volume reuse
         shell: bash
         run: |
@@ -33,6 +35,7 @@ jobs:
           docker run -d --name smoke -e COMFY_CPU_TEST=1 -e JUPYTER_TOKEN=test-token -e FILEBROWSER_PASSWORD=test-password -v "$RUNNER_TEMP/comfy-volume:/workspace" -p 8188:8188 -p 8888:8888 -p 8080:8080 comfy-global:test
           trap 'docker logs smoke; docker rm -f smoke || true' EXIT
           for i in $(seq 1 90); do
+            test "$(docker inspect -f '{{.State.Running}}' smoke)" = true || exit 1
             if curl --fail --silent http://localhost:8188/system_stats >/tmp/stats.json; then break; fi
             sleep 2
           done
@@ -43,6 +46,7 @@ jobs:
           docker stop -t 60 smoke
           docker start smoke
           for i in $(seq 1 90); do
+            test "$(docker inspect -f '{{.State.Running}}' smoke)" = true || exit 1
             if curl --fail --silent http://localhost:8188/system_stats >/dev/null; then break; fi
             sleep 2
           done

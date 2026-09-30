@@ -85,7 +85,7 @@ def main():
                       'c.ServerApp.port = 8888\n' +
                       'c.ServerApp.allow_root = True\n' +
                       'c.ServerApp.open_browser = False\n' +
-                      'c.ServerApp.log_level = "WARNING"\n')
+                      'c.ServerApp.log_level = 30\n')
     launch('JupyterLab :8888', ['jupyter', 'lab', '--config', str(config)])
     args = ['python', '/opt/ComfyUI/main.py', '--listen', '0.0.0.0', '--port', '8188',
             '--base-directory', str(DATA), '--user-directory', str(DATA / 'user'),
