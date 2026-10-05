@@ -4,6 +4,7 @@ from contextlib import closing
 import os
 from pathlib import Path
 import secrets
+import re
 import shutil
 import signal
 import sqlite3
@@ -20,8 +21,16 @@ stop = threading.Event()
 children = []
 snapshot_lock = threading.Lock()
 
-def jupyter_config(token, root):
+def jupyter_config(token, root, pod_id=None):
+    if not token:
+        raise ValueError('Jupyter authentication requires a nonempty token')
+    pod_id = os.environ.get('RUNPOD_POD_ID', '') if pod_id is None else pod_id
+    if pod_id and not re.fullmatch(r'[a-zA-Z0-9]+', pod_id):
+        raise ValueError('Invalid RUNPOD_POD_ID')
+    origin = f'https://{pod_id}-8888.proxy.runpod.net' if pod_id else ''
     return ('c.IdentityProvider.token = ' + repr(token) + '\n' +
+            'c.ServerApp.allow_origin = ' + repr(origin) + '\n' +
+            'c.ServerApp.trust_xheaders = True\n' +
             'c.ServerApp.root_dir = ' + repr(str(root)) + '\n' +
             'c.ServerApp.ip = "0.0.0.0"\n' +
             'c.ServerApp.port = 8888\n' +
@@ -32,6 +41,18 @@ def jupyter_config(token, root):
             'c.ServerApp.log_level = 30\n' +
             'c.FileContentsManager.use_atomic_writing = False\n' +
             'c.FileContentsManager.delete_to_trash = False\n')
+
+def jupyter_token():
+    if os.environ.get('JUPYTER_NO_AUTH') == '1':
+        raise ValueError('JUPYTER_NO_AUTH=1 is unsupported; authentication must remain enabled')
+    token = os.environ.get('JUPYTER_TOKEN')
+    password = os.environ.get('JUPYTER_PASSWORD')
+    if token and password and token != password:
+        raise ValueError('JUPYTER_TOKEN and JUPYTER_PASSWORD must match')
+    # PASSWORD is a compatibility alias for this image's token, not a password hash.
+    if os.environ.get('RUNPOD_POD_ID') and not (token and password):
+        raise ValueError('Deploy RunPod pods with both JUPYTER_TOKEN and JUPYTER_PASSWORD')
+    return token or password or secret('jupyter-token.txt')
 
 def model_paths(root, local):
     # Image-owned nodes work even when the attached Global Volume is completely empty.
@@ -140,13 +161,15 @@ def main():
         (DATA / 'models' / Path(source).relative_to('/opt/ComfyUI/models')).mkdir(parents=True, exist_ok=True)
     (LOCAL / 'temp').mkdir(exist_ok=True)
     restore_databases()
-    no_jupyter_auth = os.environ.get('JUPYTER_NO_AUTH') == '1'
-    token = '' if no_jupyter_auth else (os.environ.get('JUPYTER_TOKEN') or secret('jupyter-token.txt'))
+    token = jupyter_token()
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
     # Config file avoids printing the token in the command line or Jupyter startup URL.
     config = LOCAL / 'jupyter_config.py'
-    config.write_text(jupyter_config(token, ROOT), encoding='utf-8')
+    fd = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+        stream.write(jupyter_config(token, ROOT))
+    config.chmod(0o600)
     launch('JupyterLab :8888', ['jupyter', 'lab', '--config', str(config)])
     args = ['python', '/opt/lazy-cache-main.py', '--listen', '0.0.0.0', '--port', '8188',
             '--base-directory', str(DATA), '--user-directory', str(DATA / 'user'),
@@ -164,10 +187,7 @@ def main():
     thread = threading.Thread(target=periodic_snapshot, daemon=True)
     thread.start()
     print('Persistent files: /workspace/ComfyUI. No git pull, pip install or model download at startup.', flush=True)
-    if no_jupyter_auth:
-        print('Jupyter file browser: :8888/lab. Authentication disabled by JUPYTER_NO_AUTH=1.', flush=True)
-    else:
-        print('Jupyter file browser: :8888/lab. Token: /workspace/.comfy-image/jupyter-token.txt (or set JUPYTER_TOKEN).', flush=True)
+    print('Jupyter file browser: :8888/lab. Authentication enabled; use the private deployment launch file.', flush=True)
     exit_code = 0
     try:
         while not stop.wait(2):

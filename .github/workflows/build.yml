@@ -1,6 +1,7 @@
 name: Build and verify ComfyUI image
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [main]
 permissions:
@@ -15,12 +16,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install jupyter-server==2.21.1 pyyaml
+      - run: pip install jupyter-server==2.21.1 pyyaml websocket-client
       - name: Validate startup, authentication and persistence before CUDA build
         run: |
           python test_lazy_cache.py
           python test_runpoddirect.py
           python test_preflight.py
+          python test_deploy_runpod.py
   build:
     needs: preflight
     runs-on: ubuntu-latest
@@ -49,7 +51,7 @@ jobs:
           docker run --rm --entrypoint bash comfy-global:test -lc \
             'test "$CC" = /usr/bin/gcc; printf "int main(void){return 0;}\n" | "$CC" -x c - -o /tmp/compiler-test; /tmp/compiler-test'
           mkdir -p "$RUNNER_TEMP/comfy-volume"
-          docker run -d --name smoke -e COMFY_CPU_TEST=1 -e JUPYTER_TOKEN=test-token -v "$RUNNER_TEMP/comfy-volume:/workspace" -p 8188:8188 -p 8888:8888 comfy-global:test
+          docker run -d --name smoke -e COMFY_CPU_TEST=1 -e RUNPOD_POD_ID=example -e JUPYTER_TOKEN=test-token -e JUPYTER_PASSWORD=test-token -v "$RUNNER_TEMP/comfy-volume:/workspace" -p 8188:8188 -p 8888:8888 comfy-global:test
           trap 'docker logs smoke; docker rm -f smoke || true' EXIT
           for i in $(seq 1 90); do
             test "$(docker inspect -f '{{.State.Running}}' smoke)" = true || exit 1
@@ -75,7 +77,7 @@ jobs:
           test -d "$RUNNER_TEMP/comfy-volume/ComfyUI/models"
           docker stop -t 60 smoke
           docker rm smoke
-          docker run -d --name smoke -e COMFY_CPU_TEST=1 -e JUPYTER_NO_AUTH=1 -v "$RUNNER_TEMP/comfy-volume:/workspace" -p 8188:8188 -p 8888:8888 comfy-global:test
+          docker run -d --name smoke -e COMFY_CPU_TEST=1 -e RUNPOD_POD_ID=example -e JUPYTER_TOKEN=test-token -e JUPYTER_PASSWORD=test-token -v "$RUNNER_TEMP/comfy-volume:/workspace" -p 8188:8188 -p 8888:8888 comfy-global:test
           for i in $(seq 1 90); do
             test "$(docker inspect -f '{{.State.Running}}' smoke)" = true || exit 1
             if curl --fail --silent http://localhost:8188/system_stats >/dev/null; then break; fi
@@ -84,21 +86,23 @@ jobs:
           curl --fail --silent http://localhost:8188/system_stats
           test "$(curl --fail --silent http://localhost:8188/v2/manager/version)" = "V4.2.2"
           curl --fail --silent http://localhost:8188/server_download/keepalive_status | python3 -c 'import json,sys; assert json.load(sys.stdin)["enabled"] is False'
-          curl --fail --silent 'http://localhost:8888/api/status'
-          curl --fail --silent 'http://localhost:8888/api/contents/persistence-test.txt' | python3 -c 'import json,sys; assert json.load(sys.stdin)["content"] == "saved across Pods"'
+          curl --fail --silent 'http://localhost:8888/api/status?token=test-token'
+          curl --fail --silent 'http://localhost:8888/api/contents/persistence-test.txt?token=test-token' | python3 -c 'import json,sys; assert json.load(sys.stdin)["content"] == "saved across Pods"'
           docker stop -t 60 smoke
           test -s "$RUNNER_TEMP/comfy-volume/.comfy-image/comfyui-current.db"
       - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish verified image
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v7"
+          docker tag comfy-global:test "$IMAGE:comfy0.38.0-cuda13.0-v8"
           docker tag comfy-global:test "$IMAGE:latest"
-          docker push "$IMAGE:comfy0.38.0-cuda13.0-v7"
+          docker push "$IMAGE:comfy0.38.0-cuda13.0-v8"
           docker push "$IMAGE:latest"

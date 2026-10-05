@@ -55,10 +55,24 @@ class Preflight(unittest.TestCase):
         self.assertTrue(app.allow_remote_access)
         self.assertTrue(app.allow_root)
 
-    def test_jupyter_no_auth_config(self):
-        config = Config()
-        exec(launcher.jupyter_config('', self.root), {'c': config})
-        self.assertEqual(config.IdentityProvider.token, '')
+    def test_jupyter_authentication_cannot_be_disabled(self):
+        with self.assertRaises(ValueError):
+            launcher.jupyter_config('', self.root)
+        with patch.dict(os.environ, {'JUPYTER_NO_AUTH': '1'}):
+            with self.assertRaises(ValueError): launcher.jupyter_token()
+
+    def test_pod_origin_changes_and_token_aliases(self):
+        for pod_id in ('firstpod', 'replacement'):
+            config = Config()
+            exec(launcher.jupyter_config('test-token', self.root, pod_id), {'c': config})
+            app = ServerApp(config=config)
+            self.assertEqual(app.allow_origin, f'https://{pod_id}-8888.proxy.runpod.net')
+            self.assertTrue(app.trust_xheaders)
+        with patch.dict(os.environ, {'RUNPOD_POD_ID': 'pod', 'JUPYTER_TOKEN': 'a',
+                                     'JUPYTER_PASSWORD': 'a', 'JUPYTER_NO_AUTH': '0'}):
+            self.assertEqual(launcher.jupyter_token(), 'a')
+            with patch.dict(os.environ, {'JUPYTER_PASSWORD': 'b'}):
+                with self.assertRaises(ValueError): launcher.jupyter_token()
 
     def test_global_volume_save_avoids_atomic_rename(self):
         manager = FileContentsManager(config=self.config(), root_dir=str(self.root))
@@ -122,29 +136,38 @@ class Preflight(unittest.TestCase):
             self.assertNotIn('shutil.copy(source, destination)', source)
 
     def test_real_jupyter_authentication_and_proxy_host(self):
+        for pod_id in ('example', 'replacement'):
+            with self.subTest(pod_id=pod_id):
+                self.real_jupyter_authentication_and_proxy_host(pod_id)
+
+    def real_jupyter_authentication_and_proxy_host(self, pod_id):
         # Actual Jupyter startup is tiny compared with a CUDA build. No GPU libraries required.
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
         config = self.local / 'jupyter_config.py'
         token = 'preflight-token'
-        config.write_text(launcher.jupyter_config(token, self.root).replace('port = 8888', f'port = {port}').replace('ip = "0.0.0.0"', 'ip = "127.0.0.1"'))
+        config.write_text(launcher.jupyter_config(token, self.root, pod_id).replace('port = 8888', f'port = {port}').replace('ip = "0.0.0.0"', 'ip = "127.0.0.1"'))
         logfile = self.local / 'jupyter.log'
         with logfile.open('w') as log:
             env = dict(os.environ)
             for name in ('JUPYTER_CONFIG_DIR', 'JUPYTER_RUNTIME_DIR', 'JUPYTER_DATA_DIR'):
-                target = self.local / name; target.mkdir()
+                target = self.local / name; target.mkdir(exist_ok=True)
                 env[name] = str(target)
             process = subprocess.Popen([sys.executable, '-m', 'jupyter_server', '--config', str(config)], stdout=log, stderr=log, env=env)
             try:
                 url = f'http://127.0.0.1:{port}/api/status'
                 for _ in range(90):
                     if process.poll() is not None: self.fail(logfile.read_text())
-                    request = urllib.request.Request(url + '?token=' + token, headers={'Host': 'example-8888.proxy.runpod.net'})
+                    request = urllib.request.Request(url + '?token=' + token, headers={'Host': f'{pod_id}-8888.proxy.runpod.net'})
                     try:
                         with urllib.request.urlopen(request, timeout=2) as response:
                             self.assertEqual(response.status, 200); break
                     except (urllib.error.URLError, TimeoutError): time.sleep(0.5)
                 else: self.fail('Jupyter startup timeout: ' + logfile.read_text())
+                from verify_jupyter import verify
+                verify(f'http://127.0.0.1:{port}/lab?token={token}',
+                       host=f'{pod_id}-8888.proxy.runpod.net',
+                       origin=f'https://{pod_id}-8888.proxy.runpod.net')
                 with self.assertRaises(urllib.error.HTTPError) as rejected:
                     urllib.request.urlopen(urllib.request.Request(url, headers={'Accept': 'application/json'}), timeout=3)
                 self.assertEqual(rejected.exception.code, 403)
